@@ -140,51 +140,51 @@ imshow(cache.stack_activation("resid_post").norm(dim=-1).mean(dim=1)[:, 1:])
 dataset_path = 'taufeeque/othellogpt'
 model_name = 'othello-gpt'
 device = "cuda" if torch.cuda.is_available() else "cpu"
-from sae_training.config import LanguageModelSAERunnerConfig
-exp_factor=1
-new_sae_config = LanguageModelSAERunnerConfig(
-        model_name=model_name,
-        hook_point="blocks.6.hook_resid_pre",
-        hook_point_layer=6,
-        dataset_path=dataset_path,
-        context_size=59,
-        d_in=512,
-        n_batches_in_buffer=32,
-        total_training_tokens=100*(1e6), # prev: 10*(1e6)
-        store_batch_size=32,
-        device=device,
-        seed=42,
-        dtype=torch.float32,
-        b_dec_init_method="geometric_median", # todo: geometric_median
-        expansion_factor=exp_factor, # todo: adjust
-        l1_coefficient=0.0002, # prev: 0.001, 0.0001
-        lr=0.00003, # prev: 0.0003
-        lr_scheduler_name="constantwithwarmup",
-        lr_warm_up_steps=5000,
-        train_batch_size=4096,
-        use_ghost_grads=True,
-        feature_sampling_window=500,
-        dead_feature_window=1e6,
-        log_to_wandb=False,
-        wandb_project="othello_gpt_sae",
-        wandb_log_frequency=30,
-        n_checkpoints=0,
-        checkpoint_path="checkpoints",
-        start_pos_offset=5, # exclude first seq position
-        end_pos_offset=-5
-    )
+# from sae_training.config import LanguageModelSAERunnerConfig
+# exp_factor=1
+# new_sae_config = LanguageModelSAERunnerConfig(
+#         model_name=model_name,
+#         hook_point="blocks.6.hook_resid_pre",
+#         hook_point_layer=6,
+#         dataset_path=dataset_path,
+#         context_size=59,
+#         d_in=512,
+#         n_batches_in_buffer=32,
+#         total_training_tokens=100*(1e6), # prev: 10*(1e6)
+#         store_batch_size=32,
+#         device=device,
+#         seed=42,
+#         dtype=torch.float32,
+#         b_dec_init_method="geometric_median", # todo: geometric_median
+#         expansion_factor=exp_factor, # todo: adjust
+#         l1_coefficient=0.0002, # prev: 0.001, 0.0001
+#         lr=0.00003, # prev: 0.0003
+#         lr_scheduler_name="constantwithwarmup",
+#         lr_warm_up_steps=5000,
+#         train_batch_size=4096,
+#         use_ghost_grads=True,
+#         feature_sampling_window=500,
+#         dead_feature_window=1e6,
+#         log_to_wandb=False,
+#         wandb_project="othello_gpt_sae",
+#         wandb_log_frequency=30,
+#         n_checkpoints=0,
+#         checkpoint_path="checkpoints",
+#         start_pos_offset=5, # exclude first seq position
+#         end_pos_offset=-5
+#     )
 # %%
-sparse_autoencoder.cfg = new_sae_config
+# sparse_autoencoder.cfg = new_sae_config
 # %%
 from sae_training.activations_store import ActivationsStore
-act_store = ActivationsStore(new_sae_config, model)
+# act_store = ActivationsStore(new_sae_config, model)
 # %%
-act_store.get_activations(board_seqs_int[:20, :-1]).shape
+# act_store.get_activations(board_seqs_int[:20, :-1]).shape
 # %%
 import sae_training.evals
-sparse_autoencoder.cfg.start_pos_offset = 5
-sparse_autoencoder.cfg.end_pos_offset = -5
-sae_training.evals.get_recons_loss(sparse_autoencoder, model, act_store, board_seqs_int[:20, :-1])
+# sparse_autoencoder.cfg.start_pos_offset = 5
+# sparse_autoencoder.cfg.end_pos_offset = -5
+# sae_training.evals.get_recons_loss(sparse_autoencoder, model, act_store, board_seqs_int[:20, :-1])
 # %%
 full_linear_probe = torch.load(OTHELLO_ROOT/"mechanistic_interpretability/main_linear_probe.pth")
 
@@ -257,8 +257,8 @@ line([rand_max_sim_per_square, max_sim_per_square], title="rand_max_sim_per_squa
 num_games = int(1e3)
 focus_games_int = board_seqs_int[:num_games, :-5]
 focus_games_string = board_seqs_string[:num_games]
-focus_logits, focus_cache = model.run_with_cache(focus_games_int, names_filter=utils.get_act_name("resid_post", 6))
-focus_resids = focus_cache["resid_post", 6]
+focus_logits, focus_cache = model.run_with_cache(focus_games_int, names_filter=utils.get_act_name("resid_pre", 6))
+focus_resids = focus_cache["resid_pre", 6]
 focus_resids_recons, *_, focus_sae_latents = sparse_autoencoder(focus_resids, return_pre=True)
 # %%
 def one_hot(list_of_ints, num_classes=64):
@@ -302,7 +302,7 @@ focus_states_flipped_one_hot = state_stack_to_one_hot(torch.tensor(flipped_focus
 # Take the argmax
 focus_states_flipped_value = focus_states_flipped_one_hot.argmax(dim=-1)
 # %%
-probe_out = einops.einsum(focus_cache["resid_post", 6], linear_probe, "game move d_model, d_model row col options -> game move row col options")
+probe_out = einops.einsum(focus_cache["resid_pre", 6], linear_probe, "game move d_model, d_model row col options -> game move row col options")
 probe_out_value = probe_out.argmax(dim=-1)
 
 # correct_middle_odd_answers = (probe_out_value.cpu() == focus_states_flipped_value[:, :])[:, 5:-5:2]
@@ -375,4 +375,167 @@ for i in range(100):
 # imshow(np.stack(states), facet_col=0)
 imshow(np.stack(states).mean(0), title="Ave")
 imshow(np.abs(np.stack(states)).mean(0), title="Ave abs")
+# %%
+px.scatter(x=to_numpy(focus_sae_latents[:, 5:, l_id].flatten()[was_empty]), y=to_numpy(c5_log_probs[was_empty]), color=to_numpy(c5_log_probs[was_empty]>-5), opacity=0.1, marginal_x="histogram", marginal_y="histogram")
+# %%
+var_names = []
+for l in "ABCDEFGH":
+    for i in range(8):
+        for suffix in ["blank", "mine", "their's"]:
+            var_names.append(f"{l}{i}_{suffix}")
+variables = einops.rearrange(focus_states_flipped_one_hot[:, 5:, :, :, :], "game move row col opts -> (game move) (row col opts)").cuda()
+print(variables.shape)
+
+is_valid_by_move = focus_logits.log_softmax(dim=-1)[:, 5:, 1:].reshape(50000, 60) > -5
+variables = torch.cat([variables, is_valid_by_move], dim=-1)
+for i in range(1, 61):
+    var_names.append(f"is_{int_to_label(i)}_valid")
+# %%
+variables_num_true = variables.sum(dim=0)
+variables_num_false = len(variables) - variables_num_true
+line(variables_num_false, x=var_names)
+# %%
+exp_factor = 2
+d_sae = d_model * exp_factor
+focus_sae_latents_flat = F.relu(focus_sae_latents[:, 5:].reshape(50000, d_sae))
+ave_latent_if_true = (focus_sae_latents_flat.T @ variables.float()) / (variables_num_true[None, :]+1e-6)
+ave_latent_if_false = (focus_sae_latents_flat.T @ (1-variables.float())) / variables_num_false[None, :]
+ave_latent_diff = ave_latent_if_true - ave_latent_if_false
+
+line(ave_latent_diff[l_id], x=var_names)
+# %%
+frac_latent_if_true = ((focus_sae_latents_flat>0).float().T @ variables.float()) / (variables_num_true[None, :]+1e-6)
+frac_latent_if_false = ((focus_sae_latents_flat>0).float().T @ (1-variables.float())) / variables_num_false[None, :]
+frac_latent_diff = frac_latent_if_true - frac_latent_if_false
+line(frac_latent_diff[l_id], x=var_names)
+
+# %%
+line([frac_latent_diff.max(-1).values, ave_latent_diff.max(-1).values], line_labels=["frac", "ave"])
+# %%
+focus_sae_latents_flat_no_relu = (focus_sae_latents[:, 5:].reshape(50000, d_sae))
+ave_latent_no_relu_if_true = (focus_sae_latents_flat_no_relu.T @ variables.float()) / (variables_num_true[None, :]+1e-6)
+ave_latent_no_relu_if_false = (focus_sae_latents_flat_no_relu.T @ (1-variables.float())) / variables_num_false[None, :]
+ave_latent_no_relu_diff = ave_latent_no_relu_if_true - ave_latent_no_relu_if_false
+
+line(ave_latent_no_relu_diff[l_id], x=var_names)
+# %%
+line([frac_latent_diff[110], ave_latent_diff[110]], x=var_names, line_labels=["frac", "ave"])
+# %%
+var_id = var_names.index("is_E5_valid")
+line(frac_latent_diff[:, var_id])
+# %%
+px.histogram(to_numpy(focus_sae_latents_flat_no_relu[:, 110]), color=to_numpy(variables[:, var_id]), marginal="box", title="Latent 110 Detects If E5 Is Valid", labels={"x": "Latent 110", "color": "Is E5 Valid"}, histnorm="percent")
+# %%
+ave_latent_diff.max(dim=-1)
+# %%
+max_frac_per_latent = frac_latent_diff.max(dim=-1).values
+max_frac_per_latent_no_valid = frac_latent_diff[:, :-60].max(dim=-1).values
+scatter(x=max_frac_per_latent, y=max_frac_per_latent_no_valid, hover=np.arange(d_sae), xaxis="Max Frac Diff Firing Per Latent", yaxis="Max Frac Diff Firing Per Latent (No Valid)", title="Max Frac Diff Firing Per Latent vs Max Frac Diff Firing Per Latent (No Valid)")
+
+# %%
+def plot_latent(l_id):
+    line([frac_latent_diff[l_id], ave_latent_diff[l_id]], x=var_names, line_labels=["frac", "ave"], title=f"Latent {l_id} Diff Firing")
+plot_latent(394)
+plot_latent(539)
+plot_latent(805)
+plot_latent(383)
+# %%
+subvars = []
+sub_var_names = []
+for i in range(len(var_names)):
+    if ("mine" in var_names[i] or "their" in var_names[i]) and var_names[i][:2] not in ["D3", "D4", "E3", "E4"]:
+        subvars.append(i)
+        sub_var_names.append(var_names[i])
+subvars = np.array(subvars)
+sub_variables = variables[:, subvars]
+print(subvars)
+print(sub_variables.shape, len(subvars))
+# %%
+mine_variables = sub_variables[:, ::2]
+their_variables = sub_variables[:, 1::2]
+board_labels_excl_center = [i for i in all_board_labels if i not in ["D3", "D4", "E3", "E4"]]
+num_mine = mine_variables.sum(dim=0)
+num_their = their_variables.sum(dim=0)
+line([num_mine, num_their], x=board_labels_excl_center)
+# %%
+frac_latent_cond_mine = ((focus_sae_latents_flat>0).float().T @ mine_variables.float()) / (num_mine[None, :])
+frac_latent_cond_their = ((focus_sae_latents_flat>0).float().T @ (their_variables.float())) / num_their[None, :]
+frac_latent_cond_diff = frac_latent_cond_mine - frac_latent_cond_their
+line(frac_latent_cond_diff.abs().max(dim=-1).values)
+# %%
+line(frac_latent_cond_diff[208], x=board_labels_excl_center)
+# %%
+l_id = 208
+temp_tensor = torch.clone(focus_sae_latents[:, 5:, l_id].flatten())
+# temp_tensor[~labels] = torch.inf
+# temp_tensor = -temp_tensor
+indices = temp_tensor.topk(500).indices
+games = indices // 50
+moves = (indices % 50) + 5
+print(games)
+print(moves)
+
+states = []
+for i in range(500):
+    states.append(focus_states[games[i], moves[i]])
+    # plot_single_board(focus_games_string[games[i], :moves[i]+1])
+# imshow(np.stack(states), facet_col=0)
+states = np.stack(states)
+imshow((states).mean(0), title="Ave")
+imshow(np.abs((states)).mean(0), title="Ave abs")
+
+for r in [0, 1]:
+    for c in [6, 7]:
+        print("ABCDEFGH"[r], c)
+        print(pd.Series(states[:, r, c]).value_counts())
+        print()
+line(states[:, [0, 0, 1, 1, 0, 2], [6, 7, 6, 7, 5, 5]].reshape(500, -1).T, line_labels=["A6", "A7", "B6", "B7", "A5", "C5"])
+
+imshow((states == states[:, 0, 7][:, None, None]).mean(0), title="Ave Agrees with A7")
+# %%
+l_id = 208
+w_enc = sparse_autoencoder.W_enc[:, l_id]
+w_enc = w_enc / w_enc.norm()
+W_in = torch.randn_like(model.W_in[:6])
+W_in = W_in / W_in.norm(dim=-2, keepdim=True)
+line(w_enc @ W_in)
+# %%
+proxy = ((focus_states_flipped_value[:, 5:, 0, 7]!=0) & (focus_states_flipped_value[:, 5:, 0, 7]==focus_states_flipped_value[:, 5:, 0, 6]) & (focus_states_flipped_value[:, 5:, 0, 7]==focus_states_flipped_value[:, 5:, 1, 6])).flatten()
+# alt_proxy = ((focus_states_flipped_value[:, 5:, 0, 7]==focus_states_flipped_value[:, 5:, 0, 5]) & (focus_states_flipped_value[:, 5:, 0, 7]!=0)).flatten()
+alt_proxy = focus_states_flipped_value[:, 5:, 0, 7].flatten()
+color = proxy * 3 + alt_proxy
+# color = proxy
+px.histogram(to_numpy(focus_sae_latents_flat_no_relu[:, l_id]), color=to_numpy(color), barmode="overlay", histnorm="percent", marginal="box")
+# %%
+r = 3
+c = 2
+non_empty = torch.ones_like(focus_states_flipped_value[:, 5:, r, c] != 0).flatten()
+sae_latents = F.relu(focus_sae_latents[:, 5:].reshape(50000, d_sae)[non_empty])
+is_mine = (focus_states_flipped_value[:, 5:, r, c] == 0).flatten()[non_empty]
+ave_diff = sae_latents[is_mine].mean(0) - sae_latents[~is_mine].mean(0)
+
+accs = []
+ks = [1, 2, 5, 10, 20, 50, 100, 1024]
+for k in ks:
+    # if make_rand:
+    #     indices = (-torch.randn_like(ave_diff.abs())).argsort()
+    # else:
+    indices = (-(ave_diff.abs())).argsort()
+    X = to_numpy(sae_latents[:, indices[:k]])
+    y = to_numpy(is_mine)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    new_probe = LogisticRegression()
+    new_probe.fit(X_train, y_train)
+    acc = (new_probe.predict(X_test)==y_test).astype(np.float32).mean()
+    print("Accuracy", acc)
+    accs.append(float(acc))
+line(x=ks, y=accs, title="Accuracy vs K", xaxis="K", yaxis="Accuracy")
+# %%
+focus_resids_recons.shape
+# %%
+recons_acc = (einops.einsum(focus_resids_recons[:, 5:, :].reshape(50000, d_model), linear_probe, "token d_model, d_model row col opt -> token row col opt").argmax(dim=-1)==(focus_states_flipped_value[:, 5:].reshape(50000, 8, 8).cuda())).float().mean(0)
+resid_acc = (einops.einsum(focus_resids[:, 5:, :].reshape(50000, d_model), linear_probe, "token d_model, d_model row col opt -> token row col opt").argmax(dim=-1)==(focus_states_flipped_value[:, 5:].reshape(50000, 8, 8).cuda())).float().mean(0)
+imshow([recons_acc, resid_acc], facet_col=0, facet_labels=["recons", "orig"])
+imshow(resid_acc - recons_acc)
+# imshow((einops.einsum(focus_resids[:, 5:, :].reshape(50000, d_model), linear_probe, "token d_model, d_model row col opt -> token row col opt").argmax(dim=-1)==(focus_states_flipped_value[:, 5:].reshape(50000, 8, 8).cuda())).float().mean(0))
 # %%
