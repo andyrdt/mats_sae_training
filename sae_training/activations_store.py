@@ -21,7 +21,7 @@ class ActivationsStore:
     ):
         self.cfg = cfg
         self.model = model
-        self.dataset = load_dataset(cfg.dataset_path, split="train", streaming=False)
+        self.dataset = load_dataset(cfg.dataset_path, split="train", streaming=True)
         self.iterable_dataset = iter(self.dataset)
 
         # check if it's tokenized
